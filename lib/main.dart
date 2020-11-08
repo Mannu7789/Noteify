@@ -4,11 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:torch_compat/torch_compat.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:tflite/tflite.dart';
+
+int total = 0;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final cameras = await availableCameras();
   final firstCamera = cameras.first;
+
 
   runApp(
     MaterialApp(
@@ -23,7 +29,6 @@ Future<void> main() async {
 
 class TakePictureScreen extends StatefulWidget {
   final CameraDescription camera;
-
   const TakePictureScreen({
     Key key,
     @required this.camera,
@@ -57,6 +62,7 @@ class _TakePictureScreenState extends State<TakePictureScreen> {
   void dispose() {
     // Dispose of the controller when the widget is disposed.
     _controller.dispose();
+    TorchCompat.dispose();
     super.dispose();
   }
 
@@ -84,8 +90,8 @@ class _TakePictureScreenState extends State<TakePictureScreen> {
         children: <Widget>[
           Center(
             child: Container(
-              height: 100.0,
-              width: 100.0,
+              height: 180.0,
+              width: 180.0,
               child: FittedBox(
                 child: FloatingActionButton(
                   child: Icon(Icons.camera_alt),
@@ -94,6 +100,7 @@ class _TakePictureScreenState extends State<TakePictureScreen> {
                     // Take the Picture in a try / catch block. If anything goes wrong,
                     // catch the error.
                     try {
+                      TorchCompat.turnOn();
                       // Ensure that the camera is initialized.
                       await _initializeControllerFuture;
 
@@ -108,13 +115,13 @@ class _TakePictureScreenState extends State<TakePictureScreen> {
 
                       // Attempt to take a picture and log where it's been saved.
                       await _controller.takePicture(path);
+                      TorchCompat.turnOff();
 
                       // If the picture was taken, display it on a new screen.
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              DisplayPictureScreen(imagePath: path),
+                          builder: (context) => DisplayPictureScreen(path),
                         ),
                       );
                     } catch (e) {
@@ -133,18 +140,145 @@ class _TakePictureScreenState extends State<TakePictureScreen> {
 }
 
 // A widget that displays the picture taken by the user.
-class DisplayPictureScreen extends StatelessWidget {
+class DisplayPictureScreen extends StatefulWidget {
   final String imagePath;
+  DisplayPictureScreen(this.imagePath);
+  @override
+  _DisplayPictureScreenState createState() => _DisplayPictureScreenState();
+}
 
-  const DisplayPictureScreen({Key key, this.imagePath}) : super(key: key);
+class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
+  List op;
+  Image img;
+
+  @override
+  void initState() {
+    super.initState();
+    loadModel().then((value) {
+      setState(() {});
+    });
+    img = Image.file(File(widget.imagePath));
+    classifyImage(widget.imagePath);
+  }
 
   @override
   Widget build(BuildContext context) {
+//    Image img = Image.file(File(widget.imagePath));
+//    classifyImage(widget.imagePath, total);
+
     return Scaffold(
       appBar: AppBar(title: Text('Display the Picture')),
       // The image is stored as a file on the device. Use the `Image.file`
       // constructor with the given path to display the image.
-      body: Image.file(File(imagePath)),
+      body: Container(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Expanded(child: Center(child: img)),
+            SizedBox(
+              height: 20,
+            )
+          ],
+        ),
+      ),
     );
+  }
+
+  Future<void> runTextToSpeech(String outputMoney, int totalMoney) async {
+    FlutterTts flutterTts;
+    flutterTts = new FlutterTts();
+
+    if (outputMoney == "50 rupees") {
+      String tot = totalMoney.toString();
+      print(tot);
+      String speakString = "Fifty rupees, Your total is now rupees, $tot";
+      await flutterTts.setSpeechRate(0.8);
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(speakString);
+    }
+    if (outputMoney == "100 rupees") {
+      String tot = totalMoney.toString();
+      print(tot);
+      String speakString = "One Hundred rupees, Your total is now rupees, $tot";
+      await flutterTts.setSpeechRate(0.8);
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(speakString);
+    }
+    if (outputMoney == "200 rupees") {
+      String tot = totalMoney.toString();
+      print(tot);
+      String speakString = "Two Hundred rupees, Your total is now rupees, $tot";
+      await flutterTts.setSpeechRate(0.8);
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(speakString);
+    }
+    if (outputMoney == "500 rupees") {
+      String tot = totalMoney.toString();
+      print(tot);
+      String speakString =
+          "Five Hundred rupees, Your total is now rupees, $tot";
+      await flutterTts.setSpeechRate(0.8);
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(speakString);
+    }
+    if (outputMoney == "2000 rupees") {
+      String tot = totalMoney.toString();
+      print(tot);
+      String speakString =
+          "Two thousand rupees, Your total is now rupees, $tot";
+      await flutterTts.setSpeechRate(0.8);
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(speakString);
+    }
+  }
+
+  classifyImage(String image) async {
+    var output = await Tflite.runModelOnImage(
+      path: image,
+      numResults: 5,
+      threshold: 0.5,
+      imageMean: 127.5,
+      imageStd: 127.5,
+    );
+
+    op = output;
+
+    if (op != null) {
+      if (op[0]["label"] == "50 rupees") {
+        total += 50;
+        runTextToSpeech("50 rupees", total);
+      }
+      if (op[0]["label"] == "100 rupees") {
+        total += 100;
+        runTextToSpeech("100 rupees", total);
+      }
+      if (op[0]["label"] == "200 rupees") {
+        total += 200;
+        runTextToSpeech("200 rupees", total);
+      }
+      if (op[0]["label"] == "500 rupees") {
+        total += 500;
+        runTextToSpeech("500 rupees", total);
+      }
+
+      if (op[0]["label"] == "2000 rupees") {
+        total += 2000;
+        runTextToSpeech("2000 rupees", total);
+      }
+    } else
+      runTextToSpeech("No note found", total);
+  }
+
+  loadModel() async {
+    await Tflite.loadModel(
+      model: "assets/model_unquant.tflite",
+      labels: "assets/labels.txt"
+    );
+  }
+
+  @override
+  void dispose() {
+    Tflite.close();
+    super.dispose();
   }
 }
